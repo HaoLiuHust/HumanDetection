@@ -1,6 +1,7 @@
 #define _CRT_SECURE_NO_WARNINGS
 
 #include "HumanDetector.h"
+#include "chamfermatch.h"
 
 void HumanDetector::prePrecessing(Mat& src, Mat& dst)
 {
@@ -10,13 +11,13 @@ void HumanDetector::prePrecessing(Mat& src, Mat& dst)
 	}
 	assert(src.size() == dst.size() && src.type() == dst.type()&&src.channels()==1);
 
-	uchar* dstdata = dst.ptr<uchar>(0);
-	uchar* srcdata = src.ptr<uchar>(0);
+	ushort* dstdata = dst.ptr<ushort>(0);
+	ushort* srcdata = src.ptr<ushort>(0);
 
 	int width = src.cols;
 	int height = src.rows;
 	int widthstep = src.step[0] / src.elemSize();
-	for (int rowindex = 0; rowindex < height;++rowindex)
+	 for (int rowindex = 0; rowindex < height;++rowindex)
 	{
 		for (int colindex = 0; colindex < width;++colindex)
 		{
@@ -113,7 +114,41 @@ void HumanDetector::prePrecessing(Mat& src, Mat& dst)
 	}
 
 	Mat blured;
-	medianBlur(dst, blured, 3);
+	cv::medianBlur(dst, blured, 3);
+	blured.copyTo(dst);
+}
+
+void HumanDetector::edgeProcessing(Mat& src, Mat& edges)
+{
+	Mat src8U;
+	double maxv;
+	cv::minMaxLoc(src, 0, &maxv);
+	src.convertTo(src8U, CV_8U, 255 / maxv);
+
+	cout << maxv << endl;
+
+	cv::Canny(src8U, edges, lowThreshold, lowThreshold * 3);
+	vector<vector<cv::Point> >contours;
+	vector<cv::Vec4i> hierarchy;
+	cv::findContours(edges, contours, hierarchy, CV_RETR_EXTERNAL, CV_CHAIN_APPROX_SIMPLE, cv::Point(0, 0));
+	uchar* edgedata = edges.ptr<uchar>(0);
+	int widthstep = edges.step[0] / edges.elemSize();
+	cout << contours.size() << endl;
+
+	//统计轮廓长度
+	for (int i = 0; i < contours.size(); ++i)
+	{
+		if (contours[i].size() < EdgeThreshold)
+		{
+			for (int j = 0; j < contours[i].size(); ++j)
+			{
+				cv::Point pos = contours[i][j];
+				int index = pos.x + pos.y*widthstep;
+				edgedata[index] = 0;
+			}
+		}
+	}
+
 }
 
 void HumanDetector::chamferMatch(Mat& src,Mat& temp, vector<cv::Point>& matchpos)
@@ -131,9 +166,14 @@ void HumanDetector::chamferMatch(Mat& src,Mat& temp, vector<cv::Point>& matchpos
 	//cv::imshow("dismap", distmap8U);
 	//cv::waitKey(-1);
 
+	Mat dst,edges;
+	prePrecessing(src, dst);
+	edgeProcessing(dst, edges);
+	cv::imwrite("edges.png", edges);
 	vector<vector<cv::Point> > results;
 	vector<float> costs;
-	int best = cv::chamerMatching(src, temp, results, costs);
+	int best = mychamerMatching(edges, temp, results, costs);
+	
 	if (best>=0)
 	{
 		for (int i = 0; i < results[best].size();++i)
@@ -141,29 +181,6 @@ void HumanDetector::chamferMatch(Mat& src,Mat& temp, vector<cv::Point>& matchpos
 			matchpos.push_back(results[best][i]);
 		}
 	}
+	results.clear();
 }
 
-void HumanDetector::edgeProcessing(Mat& src, Mat& edges)
-{
-	cv::Canny(src, edges, lowThreshold, lowThreshold * 3);
-	vector<vector<cv::Point> >contours;
-	vector<cv::Vec4i> hierarchy;
-	cv::findContours(edges, contours, hierarchy, CV_RETR_EXTERNAL, CV_CHAIN_APPROX_SIMPLE, cv::Point(0, 0));
-	uchar* edgedata = edges.ptr<uchar>(0);
-	int widthstep = edges.step[0] / edges.elemSize();
-	cout << contours.size() << endl;
-
-	//统计轮廓长度
-	for (int i = 0; i < contours.size();++i)
-	{
-		if (contours[i].size()<EdgeThreshold)
-		{
-			for (int j = 0; j < contours[i].size();++j)
-			{
-				cv::Point pos = contours[i][j];
-				int index = pos.x + pos.y*widthstep;
-				edgedata[index] = 0;	
-			}
-		}
-	}
-}
