@@ -151,7 +151,7 @@ void HumanDetector::edgeProcessing(Mat& src, Mat& edges)
 
 }
 
-void HumanDetector::chamferMatch(Mat& src,Mat& temp, vector<cv::Point>& matchpos)
+void HumanDetector::chamferMatch(Mat& src,Mat& temp, vector<vector<cv::Point> >& matchpos)
 {
 	
 	//Mat binarymap;
@@ -165,7 +165,7 @@ void HumanDetector::chamferMatch(Mat& src,Mat& temp, vector<cv::Point>& matchpos
 	////cv::convertScaleAbs(distmap32S, distmap8U);
 	//cv::imshow("dismap", distmap8U);
 	//cv::waitKey(-1);
-
+	
 	Mat dst,edges;
 	prePrecessing(src, dst);
 	edgeProcessing(dst, edges);
@@ -174,13 +174,41 @@ void HumanDetector::chamferMatch(Mat& src,Mat& temp, vector<cv::Point>& matchpos
 	vector<float> costs;
 	int best = mychamerMatching(edges, temp, results, costs);
 	
-	if (best>=0)
+	for (int i = 0; i < costs.size();++i)
+	{
+		if (costs[i]<matchThreshold)
+		{
+			matchpos.push_back(results[i]);
+		}
+	}
+	/*if (best>=0)
 	{
 		for (int i = 0; i < results[best].size();++i)
 		{
 			matchpos.push_back(results[best][i]);
 		}
-	}
+	}*/
 	results.clear();
 }
 
+void HumanDetector::prePyramid(Mat& src, vector<Mat>& pyramid)
+{
+	int width = src.cols;
+	int height = src.rows;
+	int scalefactor = 0.75;
+	int levels = 10;
+	pyramid.resize(levels);
+	pyramid.push_back(src);
+	for (int i = 1; i < levels;++i)
+	{
+		Mat temp;
+		width *= scalefactor;
+		height *= scalefactor;
+		if (width<1||height<1)
+		{
+			break;
+		}
+		cv::pyrDown(src, temp, cv::Size(width, height));
+		pyramid.push_back(temp);
+	}
+}

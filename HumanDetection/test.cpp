@@ -32,7 +32,8 @@ int main()
 {
 	Mat src = cv::imread("003.png",CV_LOAD_IMAGE_ANYDEPTH);
 	Mat temp = cv::imread("template1.bmp", CV_LOAD_IMAGE_ANYDEPTH);
-	vector<cv::Point> matpos;
+	vector<vector<cv::Point> > matpos;
+	vector<float> matcosts;
 	HumanDetector::chamferMatch(src, temp, matpos);
 	if (matpos.size()>0)
 	{
@@ -50,9 +51,13 @@ int main()
 	int widthstep = mask.step[0] / mask.elemSize();
 	for (int i = 0; i < matpos.size();++i)
 	{
-		cv::Point pt = matpos[i];
-		int index = widthstep*pt.y + pt.x;
-		maskdata[index] = 255;
+		for (int j = 0; j < matpos[i].size();++j)
+		{
+			cv::Point pt = matpos[i][j];
+			int index = widthstep*pt.y + pt.x;
+			maskdata[index] = 255;
+		}
+		
 	}
 	srcRGB.setTo(cv::Scalar(0, 255, 0), mask);
 	cv::imshow("match", srcRGB);
