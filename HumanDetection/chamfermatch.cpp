@@ -189,10 +189,10 @@ private:
 
 		~Matching()
 		{
-			/*for (size_t i = 0; i<templates.size(); i++) {
-				delete templates[i];
-				templates[i] = NULL;
-			}*/
+			//for (size_t i = 0; i<templates.size(); i++) {
+			//	/*delete templates[i];
+			//	templates[i] = NULL;*/
+			//}
 			templates.clear();
 		}
 

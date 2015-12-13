@@ -47,15 +47,15 @@ int main()
 	Mat srcRGB;
 	cv::cvtColor(src8U, srcRGB, CV_GRAY2BGR);
 	Mat mask=Mat::zeros(src8U.size(), CV_8U);
-	uchar* maskdata = mask.ptr<uchar>(0);
-	int widthstep = mask.step[0] / mask.elemSize();
+	//uchar* maskdata = mask.ptr<uchar>(0);
+	//int widthstep = mask.step[0] / mask.elemSize();
 	for (int i = 0; i < matpos.size();++i)
 	{
-		for (int j = 0; j < matpos[i].size();++j)
+		for (int j = 0; j < matpos[i].size()-1;j+=2)
 		{
 			cv::Point pt = matpos[i][j];
-			int index = widthstep*pt.y + pt.x;
-			maskdata[index] = 255;
+			cv::Point pt2 = matpos[i][j + 1];
+			cv::line(mask, pt, pt2, cv::Scalar(255), 2);
 		}
 		
 	}

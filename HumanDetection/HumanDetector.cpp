@@ -118,27 +118,32 @@ void HumanDetector::prePrecessing(Mat& src, Mat& dst)
 	blured.copyTo(dst);
 }
 
-void HumanDetector::edgeProcessing(Mat& src, Mat& edges)
+void HumanDetector::edgeProcessing(Mat& src, Mat& edges,const int edgethreshod)
 {
 	Mat src8U;
 	double maxv;
 	cv::minMaxLoc(src, 0, &maxv);
 	src.convertTo(src8U, CV_8U, 255 / maxv);
 
-	cout << maxv << endl;
+	//cout << maxv << endl;
 
 	cv::Canny(src8U, edges, lowThreshold, lowThreshold * 3);
+	cv::morphologyEx(edges, edges, CV_MOP_CLOSE, NULL);
+	//cv::imshow("edges", edges);
+	//cv::waitKey(0);
 	vector<vector<cv::Point> >contours;
 	vector<cv::Vec4i> hierarchy;
-	cv::findContours(edges, contours, hierarchy, CV_RETR_EXTERNAL, CV_CHAIN_APPROX_SIMPLE, cv::Point(0, 0));
+	Mat inputoutput;
+	edges.copyTo(inputoutput);
+	cv::findContours(inputoutput, contours, hierarchy, CV_RETR_EXTERNAL, CV_CHAIN_APPROX_SIMPLE, cv::Point(0, 0));
 	uchar* edgedata = edges.ptr<uchar>(0);
 	int widthstep = edges.step[0] / edges.elemSize();
-	cout << contours.size() << endl;
+	////cout << contours.size() << endl;
 
 	//统计轮廓长度
 	for (int i = 0; i < contours.size(); ++i)
 	{
-		if (contours[i].size() < EdgeThreshold)
+		if (contours[i].size() < edgethreshod)
 		{
 			for (int j = 0; j < contours[i].size(); ++j)
 			{
@@ -166,38 +171,61 @@ void HumanDetector::chamferMatch(Mat& src,Mat& temp, vector<vector<cv::Point> >&
 	//cv::imshow("dismap", distmap8U);
 	//cv::waitKey(-1);
 	
-	Mat dst,edges;
+	Mat dst;
 	prePrecessing(src, dst);
-	edgeProcessing(dst, edges);
-	cv::imwrite("edges.png", edges);
+	
+	vector<Mat> pyrimages;
+	prePyramid(dst, pyrimages);
+	double scale = 1.0;
+	double invscale = 1.0;
 	vector<vector<cv::Point> > results;
 	vector<float> costs;
-	int best = mychamerMatching(edges, temp, results, costs);
-	
-	for (int i = 0; i < costs.size();++i)
+	Mat copytemp = temp.clone();
+
+	for (int i = 0; i < pyrimages.size();++i)
 	{
-		if (costs[i]<matchThreshold)
+		//string name = "00";
+		//name[1] = '0'+i;
+		//cv::imshow(name.c_str(), pyrimages[i]);
+		Mat edges; 
+		edgeProcessing(pyrimages[i], edges,EdgeThreshold*scale);	
+		cv::imshow("edges", edges);
+		cv::waitKey(0);
+		temp.copyTo(copytemp);
+		int best = mychamerMatching(edges, copytemp, results, costs);
+		
+		for (int j = 0; j < costs.size(); ++j)
 		{
-			matchpos.push_back(results[i]);
+			if (costs[j] < matchThreshold)
+			{
+				vector<cv::Point> tresults;
+				tresults.reserve(results[j].size());
+				for (int k = 0; k < results[j].size();++k)
+				{
+					cv::Point pt = results[j][k];
+					pt.x = pt.x*invscale;
+					pt.y = pt.y*invscale;
+					tresults.push_back(pt);
+				}
+				matchpos.push_back(tresults);
+			}
 		}
+
+		invscale /= scalefactor;
+		scale *= scalefactor;
+		results.clear();
+		costs.clear();
 	}
-	/*if (best>=0)
-	{
-		for (int i = 0; i < results[best].size();++i)
-		{
-			matchpos.push_back(results[best][i]);
-		}
-	}*/
-	results.clear();
+	//cv::waitKey();
 }
 
 void HumanDetector::prePyramid(Mat& src, vector<Mat>& pyramid)
 {
 	int width = src.cols;
 	int height = src.rows;
-	int scalefactor = 0.75;
 	int levels = 10;
-	pyramid.resize(levels);
+	pyramid.reserve(levels);
+	//pyramid.resize(levels);
 	pyramid.push_back(src);
 	for (int i = 1; i < levels;++i)
 	{
@@ -208,7 +236,21 @@ void HumanDetector::prePyramid(Mat& src, vector<Mat>& pyramid)
 		{
 			break;
 		}
-		cv::pyrDown(src, temp, cv::Size(width, height));
+		cv::resize(src, temp, cv::Size(width, height), 0.0, 0.0, CV_INTER_LINEAR);
+		//cv::pyrDown(src, temp, cv::Size(width, height));
 		pyramid.push_back(temp);
 	}
+}
+
+cv::Point HumanDetector::getCenter(vector<cv::Point>points)
+{
+	cv::Point centerpt(0,0);
+	size_t pointlen = points.size()>1 ? points.size() : 1;
+	for (size_t i = 0; i < points.size();++i)
+	{
+		centerpt.x += points[i].x;
+		centerpt.y += points[i].y;
+	}
+	centerpt.x = cvRound(centerpt.x / pointlen);
+	centerpt.y = cvRound(centerpt.y / pointlen);
 }
