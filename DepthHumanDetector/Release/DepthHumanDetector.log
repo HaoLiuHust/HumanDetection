@@ -1,44 +1,21 @@
-﻿生成启动时间为 2015/12/16 21:28:05。
-     1>项目“D:\Projects\C++\HumanDetection\DepthHumanDetector\DepthHumanDetector.vcxproj”在节点 2 上(Rebuild 个目标)。
+﻿生成启动时间为 2015/12/20 22:43:14。
+     1>项目“D:\Projects\C++\HumanDetection\DepthHumanDetector\DepthHumanDetector.vcxproj”在节点 2 上(Build 个目标)。
      1>ClCompile:
-         C:\Program Files (x86)\Microsoft Visual Studio 14.0\VC\bin\CL.exe /c /I"C:\Program Files (x86)\OpenNI\Include" /Zi /nologo /W3 /WX- /sdl /O2 /Oi /Oy- /GL /D _MBCS /Gm- /EHsc /MDd /GS /Gy /fp:precise /Zc:wchar_t /Zc:forScope /Zc:inline /openmp /Fo"Release\\" /Fd"Release\vc140.pdb" /Gd /TP /analyze- /errorReport:prompt DepthHumanDetector.cpp PixelSimilarity.cpp Template.cpp templmatch.cpp test.cpp Utils.cpp
-         DepthHumanDetector.cpp
-     1>DepthHumanDetector.cpp(64): warning C4244: “参数”: 从“double”转换到“int”，可能丢失数据
-     1>DepthHumanDetector.cpp(72): warning C4244: “初始化”: 从“float”转换到“int”，可能丢失数据
-     1>DepthHumanDetector.cpp(73): warning C4244: “参数”: 从“float”转换到“int”，可能丢失数据
-     1>DepthHumanDetector.cpp(154): warning C4244: “=”: 从“double”转换到“int”，可能丢失数据
-     1>DepthHumanDetector.cpp(162): warning C4244: “=”: 从“double”转换到“int”，可能丢失数据
-     1>DepthHumanDetector.cpp(175): warning C4244: “参数”: 从“double”转换到“int”，可能丢失数据
-     1>DepthHumanDetector.cpp(217): warning C4244: “初始化”: 从“double”转换到“float”，可能丢失数据
-     1>DepthHumanDetector.cpp(218): warning C4244: “初始化”: 从“double”转换到“float”，可能丢失数据
-     1>DepthHumanDetector.cpp(219): warning C4305: “初始化”: 从“double”到“float”截断
-     1>DepthHumanDetector.cpp(220): warning C4305: “初始化”: 从“double”到“float”截断
-     1>DepthHumanDetector.cpp(224): warning C4244: “初始化”: 从“float”转换到“int”，可能丢失数据
-     1>DepthHumanDetector.cpp(225): warning C4244: “初始化”: 从“float”转换到“int”，可能丢失数据
-     1>DepthHumanDetector.cpp(241): warning C4244: “初始化”: 从“double”转换到“float”，可能丢失数据
-     1>DepthHumanDetector.cpp(243): warning C4244: “初始化”: 从“double”转换到“float”，可能丢失数据
-     1>DepthHumanDetector.cpp(257): warning C4244: “参数”: 从“float”转换到“int”，可能丢失数据
-     1>DepthHumanDetector.cpp(298): warning C4244: “参数”: 从“float”转换到“int”，可能丢失数据
-         PixelSimilarity.cpp
-         Template.cpp
-         templmatch.cpp
+         C:\Program Files (x86)\Microsoft Visual Studio 12.0\VC\bin\CL.exe /c /I"C:\Program Files (x86)\OpenNI\Include" /Zi /nologo /W3 /WX- /sdl /O2 /Oi /Oy- /GL /D _MBCS /Gm- /EHsc /MT /GS /Gy /fp:precise /Zc:wchar_t /Zc:forScope /openmp /Fo"Release\\" /Fd"Release\vc120.pdb" /Gd /TP /analyze- /errorReport:prompt test.cpp
          test.cpp
-         Utils.cpp
-     1>Utils.cpp(21): warning C4244: “=”: 从“double”转换到“float”，可能丢失数据
-     1>Utils.cpp(22): warning C4244: “=”: 从“double”转换到“float”，可能丢失数据
+     1>test.cpp(34): warning C4018: “<”: 有符号/无符号不匹配
        Link:
-         C:\Program Files (x86)\Microsoft Visual Studio 14.0\VC\bin\link.exe /ERRORREPORT:PROMPT /OUT:"D:\Projects\C++\HumanDetection\Release\DepthHumanDetector.exe" /NOLOGO /LIBPATH:"C:\Program Files (x86)\OpenNI\Include" openNI.lib opencv_ml2411.lib opencv_calib3d2411.lib opencv_contrib2411.lib opencv_core2411.lib opencv_features2d2411.lib opencv_flann2411.lib opencv_gpu2411.lib opencv_highgui2411.lib opencv_imgproc2411.lib opencv_legacy2411.lib opencv_objdetect2411.lib opencv_ts2411.lib opencv_video2411.lib opencv_nonfree2411.lib opencv_ocl2411.lib opencv_photo2411.lib opencv_stitching2411.lib opencv_superres2411.lib opencv_videostab2411.lib kernel32.lib user32.lib gdi32.lib winspool.lib comdlg32.lib advapi32.lib shell32.lib ole32.lib oleaut32.lib uuid.lib odbc32.lib odbccp32.lib /MANIFEST /MANIFESTUAC:"level='asInvoker' uiAccess='false'" /manifest:embed /Debug /PDB:"D:\Projects\C++\HumanDetection\Release\DepthHumanDetector.pdb" /OPT:REF /OPT:ICF /LTCG:incremental /TLBID:1 /DYNAMICBASE /NXCOMPAT /IMPLIB:"D:\Projects\C++\HumanDetection\Release\DepthHumanDetector.lib" /MACHINE:X86 /SAFESEH Release\DepthHumanDetector.obj
+         C:\Program Files (x86)\Microsoft Visual Studio 12.0\VC\bin\link.exe /ERRORREPORT:PROMPT /OUT:"D:\Projects\C++\HumanDetection\Release\DepthHumanDetector.exe" /NOLOGO /LIBPATH:"C:\Program Files (x86)\OpenNI\Include" openNI.lib pcl_visualization_debug.lib pcl_cuda_io_debug.lib pcl_io_debug.lib opencv_ml2411d.lib opencv_calib3d2411d.lib opencv_contrib2411d.lib opencv_core2411d.lib opencv_features2d2411d.lib opencv_flann2411d.lib opencv_gpu2411d.lib opencv_highgui2411d.lib opencv_imgproc2411d.lib opencv_legacy2411d.lib opencv_objdetect2411d.lib opencv_ts2411d.lib opencv_video2411d.lib opencv_nonfree2411d.lib opencv_ocl2411d.lib opencv_photo2411d.lib opencv_stitching2411d.lib opencv_superres2411d.lib opencv_videostab2411d.lib kernel32.lib user32.lib gdi32.lib winspool.lib comdlg32.lib advapi32.lib shell32.lib ole32.lib oleaut32.lib uuid.lib odbc32.lib odbccp32.lib /MANIFEST /MANIFESTUAC:"level='asInvoker' uiAccess='false'" /manifest:embed /DEBUG /PDB:"D:\Projects\C++\HumanDetection\Release\DepthHumanDetector.pdb" /OPT:REF /OPT:ICF /LTCG /TLBID:1 /DYNAMICBASE /NXCOMPAT /IMPLIB:"D:\Projects\C++\HumanDetection\Release\DepthHumanDetector.lib" /MACHINE:X86 /SAFESEH Release\DepthHumanDetector.obj
          Release\PixelSimilarity.obj
          Release\Template.obj
          Release\templmatch.obj
          Release\test.obj
          Release\Utils.obj
          正在生成代码
-         All 1049 functions were compiled because no usable IPDB/IOBJ from previous compilation was found.
          已完成代码的生成
          DepthHumanDetector.vcxproj -> D:\Projects\C++\HumanDetection\Release\DepthHumanDetector.exe
-     1>已完成生成项目“D:\Projects\C++\HumanDetection\DepthHumanDetector\DepthHumanDetector.vcxproj”(Rebuild 个目标)的操作。
+     1>已完成生成项目“D:\Projects\C++\HumanDetection\DepthHumanDetector\DepthHumanDetector.vcxproj”(Build 个目标)的操作。
 
 已成功生成。
 
-已用时间 00:00:04.82
+已用时间 00:00:01.97

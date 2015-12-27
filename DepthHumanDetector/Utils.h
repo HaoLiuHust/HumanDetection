@@ -21,5 +21,7 @@ public:
 	void get_non_zeros(Mat& img, Mat& prob, vector<Point3f>& points, Point pdiff = Point(0, 0), double scale = 1);
 	double euclidean_distance(Point3f a, Point3f b);
 	double euclidean_distance(Point a, Point b);
+	bool depth_cmp(const Point& lhs, const Point& rhs,Mat& depthimg );
+	inline bool isZero(double num);
 };
 #endif

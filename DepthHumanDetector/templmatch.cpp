@@ -121,7 +121,7 @@ void crossCorrParallel ( const Mat& img, const Mat& _templ, Mat& corr,
   borderType |= BORDER_ISOLATED;
 
   // calculate correlation by blocks
-// #pragma omp parallel for default(none) shared(tileCount, tileCountX, blocksize, corr, templ, anchor, roiofs, img0, cn, depth, maxDepth, buf, borderType, dftsize, tcn, dftTempl, ccn, cdepth, delta, dftImg) private(i, k)
+ //#pragma omp parallel for default(none) shared(tileCount, tileCountX, blocksize, corr, templ, anchor, roiofs, img0, cn, depth, maxDepth, buf, borderType, dftsize, tcn, dftTempl, ccn, cdepth, delta, dftImg) private(i, k)
   for ( i = 0; i < tileCount; i++ )
     {
       int x = ( i%tileCountX ) *blocksize.width;
@@ -134,10 +134,13 @@ void crossCorrParallel ( const Mat& img, const Mat& _templ, Mat& corr,
       int x1 = std::max ( 0, x0 ), y1 = std::max ( 0, y0 );
       int x2 = std::min ( img0.cols, x0 + dsz.width );
       int y2 = std::min ( img0.rows, y0 + dsz.height );
+	  Rect temp(0, 0, dsz.width, dsz.height);
       Mat src0 ( img0, Range ( y1, y2 ), Range ( x1, x2 ) );
-      Mat dst ( dftImg, Rect ( 0, 0, dsz.width, dsz.height ) );
-      Mat dst1 ( dftImg, Rect ( x1-x0, y1-y0, x2-x1, y2-y1 ) );
-      Mat cdst ( corr, Rect ( x, y, bsz.width, bsz.height ) );
+      Mat dst ( dftImg, temp);
+	  Rect temp2(x1 - x0, y1 - y0, x2 - x1, y2 - y1);
+      Mat dst1 ( dftImg, temp2);
+	  Rect temp3(x, y, bsz.width, bsz.height);
+      Mat cdst ( corr, temp3);
 
       for ( k = 0; k < cn; k++ )
         {
@@ -159,12 +162,13 @@ void crossCorrParallel ( const Mat& img, const Mat& _templ, Mat& corr,
                              x1-x0, dst.cols-dst1.cols- ( x1-x0 ), borderType );
 
           dft ( dftImg, dftImg, 0, dsz.height );
-          Mat dftTempl1 ( dftTempl, Rect ( 0, tcn > 1 ? k*dftsize.height : 0,
-                                           dftsize.width, dftsize.height ) );
+		  Rect temp4(0, tcn > 1 ? k*dftsize.height : 0,
+			  dftsize.width, dftsize.height);
+          Mat dftTempl1 ( dftTempl, temp4);
           mulSpectrums ( dftImg, dftTempl1, dftImg, 0, true );
           dft ( dftImg, dftImg, DFT_INVERSE + DFT_SCALE, bsz.height );
-
-          src = dftImg ( Rect ( 0, 0, bsz.width, bsz.height ) );
+		  Rect temp5(0, 0, bsz.width, bsz.height);
+          src = dftImg (temp5);
 
           if ( ccn > 1 )
             {

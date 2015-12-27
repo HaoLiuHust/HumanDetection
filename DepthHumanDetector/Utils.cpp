@@ -37,6 +37,17 @@ double Utils::euclidean_distance(Point a, Point b)
 	return sqrt(pow(a.x - b.x, 2) + pow(a.y - b.y, 2));
 }
 
+bool Utils::depth_cmp(const Point & lhs, const Point & rhs, Mat & depthimg)
+{
+	return depthimg.at<ushort>(lhs) < depthimg.at<ushort>(rhs);
+}
+
+inline bool Utils::isZero(double num)
+{
+	double mind = 1e-6;
+	return num<=mind&&num>=mind;
+}
+
 Mat Utils::rgb2bw(Mat& im_rgb,Mat& img_bw)
 {
 	Mat im_gray;

@@ -3,9 +3,23 @@
 #include "Utils.h"
 #include "templmatch.h"
 #include <omp.h>
+#include <algorithm>
+//#include <device_launch_parameters.h>
+//#include <cuda_runtime.h>
+//#include <opencv2/gpu/gpu.hpp>
 
 const Size2i MORPH_SIZE = Size(11, 11);
 Utils utils;
+vector<Mat> pyramid;
+vector<Mat> chamfer;
+vector<Mat> matching;
+enum MASKFLAG
+{
+	NOVISITED,
+	CONTOURS,
+	VISITED
+};
+
 
 DepthHumanDetector::DepthHumanDetector()
 {
@@ -19,19 +33,22 @@ DepthHumanDetector::DepthHumanDetector()
 	match3D_thr = 0.4;
 	scales = 6;
 	scales_default = 6;
+	depth_thr = 300;
+	depth_thrf = 100 * 10.0;
 }
 
-void DepthHumanDetector::detect_face_depth(Mat & depth_image,vector<Rect>& detected_faces)
+void DepthHumanDetector::detect_face_depth(Mat & depth_image, Mat& disparity_image,vector<Rect>& detected_faces)
 {
-	Mat disparity_image;
-	disparity_image = imread("disparity01.png", CV_LOAD_IMAGE_ANYDEPTH);
+	detected_faces.clear();
 	//utils.convert16to8U(depth_image, disparity_image);
 	Mat element = getStructuringElement(MORPH_RECT, MORPH_SIZE, Point(5, 5));
 
 	utils.preProcessing(disparity_image, disparity_image);
 	//imshow("8U", disparity_image);
 	depth_image.setTo(0, (disparity_image == 0));
-	dilate(depth_image, depth_image, element);
+	depth_precessing(depth_image, depth_image);
+	depthimage = depth_image;
+	//dilate(depth_image, depth_image, element);
 	/*imshow("depth", depth_image);
 	waitKey();*/
 
@@ -55,17 +72,25 @@ void DepthHumanDetector::detect_face_depth(Mat & depth_image,vector<Rect>& detec
 	matching.reserve(scales);
 	matching.resize(scales);
 
-	for (unsigned int k = 0; k < templates.size(); k++)
+	int arc_thr_lovv = arc_thr_low;
+	int arc_thr_highv = arc_thr_high;
+
+//#pragma omp parallel for default(none) shared(disparity_image,all_head_features,depth_image)
+	for (int k = 0; k < templates.size(); k++)
 	{
-		double t = (double)getTickCount();
 		vector<Point3f> head_matched_points;
-		chamfer_matching(disparity_image, templates[k].template2d, head_matched_points);
+		Mat canny_im;
+		double t = (double)getTickCount();
+		chamfer_matching(disparity_image, templates[k].template2d, canny_im,head_matched_points);
 		t = (double)getTickCount() - t;
-		//       cout << t*1000./cv::getTickFrequency() << endl;
+		//cout << t*1000./cv::getTickFrequency() << endl;
 		vector<PixelSimilarity> head_features;
 		compute_headparameters(depth_image, head_matched_points, head_features);
 		vector<PixelSimilarity> new_head_features;
-		false_positives(head_features, arc_thr_low, arc_thr_high, new_head_features);
+		t = (double)getTickCount();
+		false_positives(head_features, canny_im,arc_thr_low, arc_thr_high, new_head_features);
+		t = (double)getTickCount() - t;
+		//cout << t*1000. / cv::getTickFrequency() << endl;
 		match_template3D(disparity_image, new_head_features, all_head_features, k);
 	}
 	
@@ -76,68 +101,67 @@ void DepthHumanDetector::detect_face_depth(Mat & depth_image,vector<Rect>& detec
 		int wh = final_head_features[i].radius * 2;
 		rect = Rect(final_head_features[i].point.x - final_head_features[i].radius, final_head_features[i].point.y - final_head_features[i].radius, wh, wh);
 		detected_faces.push_back(rect);
+		detected_heads.push_back(final_head_features[i].point);
 	}
+
+	sort_heads(detected_heads);
+
 	pyramid.clear();
 	chamfer.clear();
 	matching.clear();
+}
+
+void DepthHumanDetector::detect_body_depth(Mat & depth_image, Mat & disparity_image, vector<Mat>& detected_bodies)
+{
+	vector<Rect> detected_faces;
+	double t = (double)getTickCount();
+	
+	detect_face_depth(depth_image, disparity_image, detected_faces);
+	t = (double)getTickCount() - t;
+	cout << t*1000. / cv::getTickFrequency() << endl;
+	extract_contours(depth_image, detected_heads, detected_bodies);
+}
+
+vector<Point> DepthHumanDetector::get_detectedheads()
+{
+	return detected_heads;
 }
 
 
 
 void DepthHumanDetector::load_templates()
 {
-	string head_template1 = "./pictures/template3.png";
-	string head_template2 = "./pictures/template.png";
-	string head_template3 = "./pictures/only_head_template.png";
-	string head_template4 = "./pictures/only_head_template_small.png";
+	string head_template[4];
+	head_template[0] = "./pictures/template3.png";
+	head_template[1] = "./pictures/template.png";
+	head_template[2] = "./pictures/only_head_template.png";
+	head_template[3] = "./pictures/only_head_template_small.png";
 
-	string head_template3D1 = "./pictures/template3D.png";
-	string head_template3D2 = "./pictures/template3D.png";
-	string head_template3D3 = "./pictures/only_head_template_3d.png";
-	string head_template3D4 = "./pictures/only_head_template_3d_small.png";
+	string head_template3D[4];
+	head_template3D[0] = "./pictures/template3D.png";
+	head_template3D[1] = "./pictures/template3D.png";
+	head_template3D[2] = "./pictures/only_head_template_3d.png";
+	head_template3D[3] = "./pictures/only_head_template_3d_small.png";
 
-	Mat head_template_im1 = imread(head_template1, CV_LOAD_IMAGE_ANYDEPTH);
-	Mat head_template_im2 = imread(head_template2, CV_LOAD_IMAGE_ANYDEPTH);
-	Mat head_template_im3 = imread(head_template3, CV_LOAD_IMAGE_ANYDEPTH);
-	Mat head_template_im4 = imread(head_template4, CV_LOAD_IMAGE_ANYDEPTH);
-	Mat head_template3D_im1 = imread(head_template3D1, CV_LOAD_IMAGE_ANYDEPTH);
-	Mat head_template3D_im2 = imread(head_template3D2, CV_LOAD_IMAGE_ANYDEPTH);
-	Mat head_template3D_im3 = imread(head_template3D3, CV_LOAD_IMAGE_ANYDEPTH);
-	Mat head_template3D_im4 = imread(head_template3D4, CV_LOAD_IMAGE_ANYDEPTH);
-
-	utils.rgb2bw(head_template_im1, head_template_im1);
-	head_template_im1.convertTo(head_template_im1, CV_32F);
-	utils.rgb2bw(head_template_im2, head_template_im2);
-	head_template_im2.convertTo(head_template_im2, CV_32F);
-	utils.rgb2bw(head_template_im3, head_template_im3);
-	head_template_im3.convertTo(head_template_im3, CV_32F);
-	utils.rgb2bw(head_template_im4, head_template_im4);
-	head_template_im4.convertTo(head_template_im4, CV_32F);
-
-	if (head_template3D_im1.depth() == 3)
+	Mat head_templateim[4];
+	Mat head_template3D_im[4];
+#pragma omp parallel for default(none) shared(head_templateim,head_template3D_im,utils,head_template,head_template3D)
+	for (int i = 0; i < 4;++i)
 	{
-		cvtColor(head_template3D_im1, head_template3D_im1, CV_RGB2GRAY);
+		head_templateim[i]=imread(head_template[i], CV_LOAD_IMAGE_ANYDEPTH);
+		head_template3D_im[i] = imread(head_template3D[i], CV_LOAD_IMAGE_ANYDEPTH);
+		utils.rgb2bw(head_templateim[i], head_templateim[i]);
+		head_templateim[i].convertTo(head_templateim[i], CV_32F);
+		if (head_template3D_im[i].depth() == 3)
+		{
+			cvtColor(head_template3D_im[i], head_template3D_im[i], CV_RGB2GRAY);
+		}
 	}
-
-	if (head_template3D_im2.depth() == 3)
+	
+	for (int i = 0; i < 4;++i)
 	{
-		cvtColor(head_template3D_im2, head_template3D_im2, CV_RGB2GRAY);
+		templates.push_back(Template(head_templateim[i], head_template3D_im[i]));
 	}
-
-	if (head_template3D_im3.depth() == 3)
-	{
-		cvtColor(head_template3D_im3, head_template3D_im3, CV_RGB2GRAY);
-	}
-
-	if (head_template3D_im4.depth() == 3)
-	{
-		cvtColor(head_template3D_im4, head_template3D_im4, CV_RGB2GRAY);
-	}
-
-	templates.push_back(Template(head_template_im1, head_template3D_im1));
-	templates.push_back(Template(head_template_im2, head_template3D_im2));
-	templates.push_back(Template(head_template_im3, head_template3D_im3));
-	templates.push_back(Template(head_template_im4, head_template3D_im4));
 
 	sort(templates.begin(), templates.end());
 }
@@ -172,44 +196,51 @@ bool DepthHumanDetector::check_dimensions(Mat & image_depth)
 	}
 }
 
-void DepthHumanDetector::chamfer_matching(Mat & image, Mat & template_im, vector<Point3f>& chamfer_heads)
+void DepthHumanDetector::chamfer_matching(Mat & image, Mat & template_im, Mat& canny_im, vector<Point3f>& chamfer_heads)
 {
 	double xdiff = template_im.cols / 2;
 	double ydiff = template_im.rows / 2;
 	Point pdiff = Point(xdiff, ydiff);
 	
-	Mat matching_thr;
+	
 
 	canny_im.create(image.rows, image.cols, image.depth());
 	Canny(image, canny_im, canny_thr1, canny_thr2, 3, true);
 
-	// #pragma omp parallel for default(none) shared(chamfer, pyramid)
+	Size size0 = Size();
+
+#pragma omp parallel for default(none) shared(chamfer, pyramid,size0,canny_im)
 	for (int i = 0; i < scales; i++)
 	{
-		resize(canny_im, pyramid[i], Size(), pow(scale_factor, i), pow(scale_factor, i), INTER_NEAREST);
+		resize(canny_im, pyramid[i], size0, pow(scale_factor, i), pow(scale_factor, i), INTER_NEAREST);
 		distanceTransform((255 - pyramid[i]), chamfer[i], CV_DIST_C, 3);
 	}
 
-	// #pragma omp parallel for default(none) shared(chamfer, matching, chamfer_heads, matching_thr, template_im, pdiff, cv_utils)
+	Mat matching_thr;
+
+#pragma omp parallel for default(none) shared(chamfer, matching, chamfer_heads, template_im, pdiff, utils) private(matching_thr)
 	for (int j = 0; j < scales; j++)
 	{
 		double t = (double)getTickCount();
 		//       matchTemplate ( chamfer[j], template_im, matching[j], CV_TM_CCOEFF );
 		matchTemplateParallel(chamfer[j], template_im, matching[j], CV_TM_CCOEFF);
 		t = (double)getTickCount() - t;
-		cout << t*1000. / cv::getTickFrequency() << endl;
+		//cout << t*1000. / cv::getTickFrequency() << endl;
 
 		double minVal, maxVal;
 		Point minLoc, maxLoc;
 		normalize(matching[j], matching[j], 0.0, 1.0, NORM_MINMAX);
 		minMaxLoc(matching[j], &minVal, &maxVal, &minLoc, &maxLoc);
-
+		//Mat matching_thr;
 		threshold(matching[j], matching_thr, 1.0 / chamfer_thr, 1.0, CV_THRESH_BINARY_INV);
 		double scale = pow(1.0 / scale_factor, j);
+		vector<Point3f> chamfer_heads_private;
+		utils.get_non_zeros(matching_thr, matching[j], chamfer_heads_private, pdiff, scale);
 
-		// #pragma omp critical
+		#pragma omp critical
 		{
-			utils.get_non_zeros(matching_thr, matching[j], chamfer_heads, pdiff, scale);
+			//utils.get_non_zeros(matching_thr, matching[j], chamfer_heads, pdiff, scale);
+			chamfer_heads.insert(chamfer_heads.end(), chamfer_heads_private.begin(), chamfer_heads_private.end());
 		}
 	}
 }
@@ -252,31 +283,33 @@ void DepthHumanDetector::compute_headparameters(Mat & image, vector<Point3f>& ch
 	}
 }
 
-void DepthHumanDetector::false_positives(vector<PixelSimilarity>& potential_heads, int thr, int thr2, vector<PixelSimilarity>& false_positive_removed_heads)
+void DepthHumanDetector::false_positives(vector<PixelSimilarity>& potential_heads,Mat& canny_im, int thr, int thr2, vector<PixelSimilarity>& false_positive_removed_heads)
 {
-	vector<PixelSimilarity> updated_heads;
-
-	for (unsigned int i = 0; i < potential_heads.size(); i++)
+	
+//#pragma omp parallel for default(none) shared(potential_heads,canny_im,thr,thr2,false_positive_removed_heads)
+	for (int i = 0; i < potential_heads.size(); i++)
 	{
 		Rect roi(potential_heads[i].point.x - potential_heads[i].radius, potential_heads[i].point.y - potential_heads[i].radius, potential_heads[i].radius * 2, potential_heads[i].radius * 2);
 		if (!(0 <= roi.x && 0 <= roi.width && roi.x + roi.width < canny_im.cols && 0 <= roi.y && 0 <= roi.height && roi.y + roi.height < canny_im.rows))
 		{
 			continue;
 		}
-
-		Mat cannyroi(canny_im, roi);
-
+		Mat cannyroi;
+		cannyroi=canny_im(roi);
+		
 		if (!cannyroi.empty())
 		{
 			vector<vector<Point> > contour;
+			vector<Point> approx;
 			findContours(cannyroi, contour, CV_RETR_EXTERNAL, CV_CHAIN_APPROX_NONE);
-			for (unsigned int j = 0; j < contour.size(); j++)
+			
+			for (int j = 0; j < contour.size(); j++)
 			{
-				vector<Point> approx;
-				approxPolyDP(contour[j], approx, 5, false);
+				approx.clear();
+				approxPolyDP(Mat(contour[j]), approx, 5, false);
 				if (approx.size() > (unsigned int) thr && approx.size() < (unsigned int)thr2)
 				{
-					updated_heads.push_back(potential_heads[i]);
+					false_positive_removed_heads.push_back(potential_heads[i]);
 					break;
 				}
 			}
@@ -296,8 +329,8 @@ void DepthHumanDetector::match_template3D(Mat& image_disparity, vector<PixelSimi
 	{
 		return;
 	}
-
-	for (unsigned int i = 0; i < potentials.size(); i++)
+#pragma omp parallel for default(none) shared(potentials,image_disparity,heads,n) private(minVal,maxVal,match,minLoc,maxLoc)
+	for (int i = 0; i < potentials.size(); i++)
 	{
 		Rect rect_roi(potentials[i].point.x - potentials[i].radius, potentials[i].point.y - potentials[i].radius, 2 * potentials[i].radius, 2 * potentials[i].radius);
 		Mat roi(image_disparity, rect_roi);
@@ -310,10 +343,13 @@ void DepthHumanDetector::match_template3D(Mat& image_disparity, vector<PixelSimi
 
 		minMaxLoc(match, &minVal, &maxVal, &minLoc, &maxLoc);
 
+		vector<PixelSimilarity> heads_private;
 		if (minVal >= match3D_thr)
 		{
-			heads.push_back(PixelSimilarity(potentials[i].point, potentials[i].radius, potentials[i].similarity));
+			heads_private.push_back(PixelSimilarity(potentials[i].point, potentials[i].radius, potentials[i].similarity));
 		}
+#pragma omp critical
+		heads.insert(heads.end(),heads_private.begin(), heads_private.end());
 	}
 }
 
@@ -346,3 +382,307 @@ void DepthHumanDetector::merge_rectangles(vector<PixelSimilarity>& rectangles, v
 		queue.clear();
 	}
 }
+
+void DepthHumanDetector::boundary_filter(Mat& src, Mat& filtered)
+{
+	Mat kern = (Mat_<char>(1, 6) << 1, 1, 1, -1, -1, -1);
+	filter2D(src, filtered, src.depth(), kern);
+	add(src, filtered, filtered);
+}
+
+void DepthHumanDetector::extract_contours(Mat & depthimg, vector<Point>& heads, vector<Mat>& bodies)
+{
+	bodies.reserve(heads.size());
+	bodies.resize(heads.size());
+	Mat region = Mat::zeros(depthimg.size(), CV_8U);
+//#pragma omp parallel for default(none) shared(bodies,depthimg,heads,region)
+	for (int i = 0; i < heads.size();++i)
+	{
+		Point seed = heads[i];
+		
+		region_grow(depthimg, seed, region);
+		Mat body;
+		depthimg.copyTo(body, (region == CONTOURS));
+
+		region.setTo(NOVISITED, (region == VISITED));
+		region.setTo(VISITED, (region == CONTOURS));
+		//bodies.push_back(body);
+		bodies[i] = body;
+	}
+}
+
+
+
+void DepthHumanDetector::get_neighborings(Mat & depthimg, Mat & region, vector<DepthSimilarity>& edgesbefore, float depthbefore,vector<DepthSimilarity>& edgesafter)
+{
+	Point offset[4] = { {-1,0},{0,-1},{1,0},{0,1} };
+	DepthSimilarity ds;
+	int width = depthimg.cols;
+	int height = depthimg.rows;
+	for (int i = 0; i < edgesbefore.size();++i)
+	{
+		#pragma omp parallel for default(none) shared(offset,edgesbefore,width,height,region,depthbefore,depthimg,ds,edgesafter,i) 
+		for (int j = 0; j < 4;++j)
+		{
+			Point pt = edgesbefore[i].point + offset[j];
+			if (pt.x>=width||pt.y>=height||pt.x<0||pt.y<0)
+			{
+				continue;
+			}
+			if (region.at<uchar>(pt)==NOVISITED)
+			{
+				float similarity = (float)depthimg.at<ushort>(pt) - depthbefore;
+				
+				if (similarity <= 0.0&&abs(similarity) <= depth_thrf)
+				{
+				#pragma omp critical 
+				{
+					ds.point = pt;
+					ds.similarity = similarity;
+
+					edgesafter.push_back(ds);
+				}
+				region.at<uchar>(pt) = CONTOURS;
+				}
+				else if (similarity >= 0.0&&similarity <= depth_thr)
+				{
+				#pragma omp critical 
+				{
+					ds.point = pt;
+					ds.similarity = similarity;
+
+					edgesafter.push_back(ds);
+				}
+				region.at<uchar>(pt) = CONTOURS;
+				}
+				else
+					region.at<uchar>(pt) = VISITED;
+			}
+		}
+	}
+	
+	//sort(edgesafter.begin(), edgesafter.end());
+}
+
+void DepthHumanDetector::region_grow(Mat& depthimg, Point seed, Mat& region)
+{
+	float depthavg = depthimg.at<ushort>(seed);
+	vector<DepthSimilarity> edgesbefore,edgesafer;
+	edgesbefore.push_back(DepthSimilarity(seed, 0));
+	region.at<uchar>(seed) = CONTOURS;
+	while (true)
+	{
+		get_neighborings(depthimg, region, edgesbefore, depthavg, edgesafer);
+		
+		if (edgesafer.empty())
+		{
+			break;
+		}
+		/*for (int i = 0; i < edgesafer.size();++i)
+		{
+			if (edgesafer[i].similarity<depth_thr)
+			{
+				region.at<uchar>(edgesafer[i].point) = CONTOURS;
+			}
+		}*/
+
+		edgesbefore.swap(edgesafer);
+		depthavg = mean(depthimg, (region == CONTOURS))[0];
+		edgesafer.clear();
+	}
+
+}
+
+void DepthHumanDetector::depth_precessing(Mat& src, Mat& dst)
+{
+
+		if (dst.empty())
+		{
+			dst = Mat::zeros(src.size(), src.type());
+		}
+		assert(src.size() == dst.size() && src.type() == dst.type() && src.channels() == 1);
+
+		ushort* dstdata = dst.ptr<ushort>(0);
+		ushort* srcdata = src.ptr<ushort>(0);
+
+		int width = src.cols;
+		int height = src.rows;
+		int widthstep = src.step[0] / src.elemSize();
+		Point minloc,maxloc;
+
+		minloc.x =0;
+		minloc.y = 0;
+		maxloc.x = width;
+		maxloc.y = height;
+		//find roi
+		/*for (int rowindex = 0; rowindex < height; ++rowindex)
+		{
+			for (int colindex = 0; colindex < width; ++colindex)
+			{
+				int depthindex = colindex + rowindex*widthstep;
+				if (srcdata[depthindex] != 0)
+				{
+					if (minloc.x>colindex)
+					{
+						minloc.x = colindex;
+					}
+					if (minloc.y>rowindex)
+					{
+						minloc.y = rowindex;
+					}
+					if (maxloc.x<colindex)
+					{
+						maxloc.x = colindex;
+					}
+					if (maxloc.y<rowindex)
+					{
+						maxloc.y = rowindex;
+					}
+
+				}
+			}
+		}*/
+
+		Range rowRange, colRange;
+		rowRange.start = minloc.y;
+		rowRange.end = maxloc.y;
+		colRange.start = minloc.x;
+		colRange.end = maxloc.x;
+
+		for (int rowindex = minloc.y; rowindex <= maxloc.y; ++rowindex)
+		{
+			for (int colindex = minloc.x; colindex <= maxloc.x; ++colindex)
+			{
+				int depthindex = colindex + rowindex*widthstep;
+				int fillindex = depthindex;
+				if (srcdata[depthindex] == 0)
+				{
+					int searchwin = 1;
+					bool found = false;
+					while (!found)
+					{
+						int rangex1 = colindex - searchwin;
+						int rangex2 = colindex + searchwin;
+						int rangey1 = rowindex - searchwin;
+						int rangey2 = rowindex + searchwin;
+
+						if (rangex1<minloc.x&&rangex2>maxloc.x&&rangey1<minloc.y&&rangey2>maxloc.y)
+						{
+							found = true;
+						}
+						if (!found&&rangey1 >= minloc.y)
+						{
+							int range1 = rangex1 >= minloc.x ? rangex1 : minloc.x;
+							int range2 = rangex2 <= maxloc.x ? rangex2 : maxloc.x;
+
+							for (int i = range1; i < range2 + 1; ++i)
+							{
+								int index = rangey1*widthstep + i;
+								if (srcdata[index] != 0)
+								{
+									fillindex = index;
+									found = true;
+									break;
+								}
+							}
+						}
+						if (!found&&rangey2 <= maxloc.y)
+						{
+							int range1 = rangex1 >= minloc.x ? rangex1 : minloc.x;
+							int range2 = rangex2 <= maxloc.x ? rangex2 : maxloc.x;
+
+							for (int i = range1; i < range2 + 1; ++i)
+							{
+								int index = rangey2*widthstep + i;
+								if (srcdata[index] != 0)
+								{
+									fillindex = index;
+									found = true;
+									break;
+								}
+							}
+						}
+
+						if (!found&&rangex1 >= minloc.x)
+						{
+							int range1 = rangey1 >= minloc.y ? rangey1 : minloc.y;
+							int range2 = rangey2 <= maxloc.y ? rangey2 : maxloc.y;
+
+							for (int i = range1; i < range2 + 1; ++i)
+							{
+								int index = i*widthstep + rangex1;
+								if (srcdata[index] != 0)
+								{
+									fillindex = index;
+									found = true;
+									break;
+								}
+							}
+						}
+
+						if (!found&&rangex2<maxloc.x)
+						{
+							int range1 = rangey1 >= minloc.y ? rangey1 : minloc.y;
+							int range2 = rangey2 <= maxloc.y ? rangey2 : maxloc.y;
+
+							for (int i = range1; i < range2 + 1; ++i)
+							{
+								int index = i*widthstep + rangex2;
+								if (srcdata[index] != 0)
+								{
+									fillindex = index;
+									found = true;
+									break;
+								}
+							}
+						}
+
+						++searchwin;
+					}
+				}
+
+				dstdata[depthindex] = srcdata[fillindex];
+			}
+		}
+
+		//Mat dst8U;
+		//convert16to8U(src, dst8U);
+		//cv::imshow("ori", dst8U);
+		//convert16to8U(dst, dst8U);
+		//cv::imshow("filled", dst8U);
+		Mat blured;
+		cv::medianBlur(dst, blured, 3);
+		blured.copyTo(dst);
+		//convert16to8U(dst, dst8U);
+		//cv::imshow("filterd", dst8U);
+		//cv::waitKey(0);
+}
+
+void DepthHumanDetector::sort_heads(vector<Point>& detected_heads)
+{
+	if (detected_heads.size()<=1)
+	{
+		return;
+	}
+
+	
+	for (int i = 1; i < detected_heads.size();++i)
+	{
+		int insertpos = i-1;
+		Point curpos = detected_heads[i];
+		ushort cur = depthimage.at<ushort>(detected_heads[i]);
+		for (insertpos = i - 1; insertpos >= 0;--insertpos)
+		{
+			if (cur>depthimage.at<ushort>(detected_heads[insertpos]))
+			{
+				break;
+			}
+			else
+				detected_heads[insertpos+1] = detected_heads[insertpos];
+		}
+		detected_heads[insertpos+1] = curpos;
+	}
+}
+
+
+
