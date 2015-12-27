@@ -11,8 +11,8 @@ using namespace cv;
 int main()
 {
 	DepthHumanDetector depthdetector;
-	Mat depthimg = imread("1.29874e+011.png", CV_LOAD_IMAGE_ANYDEPTH);
-	Mat disparityimg = imread("1.29874e+011d.png", CV_LOAD_IMAGE_ANYDEPTH);
+	Mat depthimg = imread("6.png", CV_LOAD_IMAGE_ANYDEPTH);
+	Mat disparityimg = imread("6d.png", CV_LOAD_IMAGE_ANYDEPTH);
 
 	vector<Rect> faces;
 	double t = (double)getTickCount();
@@ -20,8 +20,8 @@ int main()
 	applyColorMap(disparityimg, colorimg, COLORMAP_HOT);
 	imshow("colrmap", colorimg);
 	waitKey();*/
-	depthdetector.detect_face_depth(depthimg, disparityimg,faces);
-	/*t = (double)getTickCount() - t;
+	/*depthdetector.detect_face_depth(depthimg, disparityimg,faces);
+	t = (double)getTickCount() - t;
 	cout << faces.size() << endl;
 	cout << t*1000. / cv::getTickFrequency() << endl;
 	for (int i = 0; i < faces.size();++i)
@@ -29,9 +29,9 @@ int main()
 		rectangle(disparityimg, faces[i], Scalar(255));
 	}
 	imshow("faces", disparityimg);
-	waitKey();
+	waitKey();*/
 
-	vector<Point> detected_heads = depthdetector.get_detectedheads();
+	/*vector<Point> detected_heads = depthdetector.get_detectedheads();
 	Mat regin = Mat::zeros(depthimg.size(),CV_8U);
 	ushort temp = depthimg.at<ushort>(detected_heads[0]);
 	for (int i = 0; i < regin.rows;++i)

@@ -18,6 +18,7 @@ public:
 	void detect_face_depth(Mat& depth_image, Mat& disparity_image,vector<Rect>& detected_faces);
 	void detect_body_depth(Mat& depth_image, Mat& disparity_image,vector<Mat>& detected_bodies);
 	vector<Point> get_detectedheads();
+	~DepthHumanDetector();
 	double canny_thr1;
 	double canny_thr2;
 	double chamfer_thr;
@@ -45,13 +46,13 @@ private:
 	void boundary_filter(Mat& src, Mat& filtered);
 	void extract_contours(Mat& depthimg, vector<Point>& heads, vector<Mat>& bodies);
 	void get_neighborings(Mat& depthimg, Mat& region, vector<DepthSimilarity>& edgesbefore,float depthbefore, vector<DepthSimilarity>& edgesafter);
-	void region_grow(Mat& depthimg, Point seed, Mat& region);
+	void region_grow(Mat& depthimg, Point seed, Mat& region,float head_height);
 	void depth_precessing(Mat& src, Mat& dst);
 	void sort_heads(vector<Point>& detected_heads);
-
+	bool is_body(Mat& depthimag, float depthavg,Point pt);
 private:
 	vector<Template> templates;
-	
+	vector<PixelSimilarity> final_head_features;
 	vector<Point> detected_heads;
 	Mat depthimage;
 	//Mat canny_im;

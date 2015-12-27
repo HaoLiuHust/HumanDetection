@@ -26,7 +26,7 @@ DepthHumanDetector::DepthHumanDetector()
 	load_templates();
 	canny_thr1 = 5;
 	canny_thr2 = 7;
-	chamfer_thr = 10;
+	chamfer_thr = 7;
 	arc_thr_low = 7;
 	arc_thr_high = 20;
 	scale_factor = 0.75;
@@ -40,6 +40,8 @@ DepthHumanDetector::DepthHumanDetector()
 void DepthHumanDetector::detect_face_depth(Mat & depth_image, Mat& disparity_image,vector<Rect>& detected_faces)
 {
 	detected_faces.clear();
+	final_head_features.clear();
+	detected_heads.clear();
 	//utils.convert16to8U(depth_image, disparity_image);
 	Mat element = getStructuringElement(MORPH_RECT, MORPH_SIZE, Point(5, 5));
 
@@ -52,7 +54,7 @@ void DepthHumanDetector::detect_face_depth(Mat & depth_image, Mat& disparity_ima
 	/*imshow("depth", depth_image);
 	waitKey();*/
 
-	vector<PixelSimilarity> final_head_features;
+	
 	vector<PixelSimilarity> all_head_features;
 
 	if (!check_dimensions(depth_image))
@@ -74,12 +76,12 @@ void DepthHumanDetector::detect_face_depth(Mat & depth_image, Mat& disparity_ima
 
 	int arc_thr_lovv = arc_thr_low;
 	int arc_thr_highv = arc_thr_high;
-
+	Mat canny_im;
 //#pragma omp parallel for default(none) shared(disparity_image,all_head_features,depth_image)
 	for (int k = 0; k < templates.size(); k++)
 	{
 		vector<Point3f> head_matched_points;
-		Mat canny_im;
+		
 		double t = (double)getTickCount();
 		chamfer_matching(disparity_image, templates[k].template2d, canny_im,head_matched_points);
 		t = (double)getTickCount() - t;
@@ -125,6 +127,14 @@ void DepthHumanDetector::detect_body_depth(Mat & depth_image, Mat & disparity_im
 vector<Point> DepthHumanDetector::get_detectedheads()
 {
 	return detected_heads;
+}
+
+DepthHumanDetector::~DepthHumanDetector()
+{
+	templates.clear();
+	detected_heads.clear();
+	final_head_features.clear();
+	depthimage.release();
 }
 
 
@@ -216,9 +226,9 @@ void DepthHumanDetector::chamfer_matching(Mat & image, Mat & template_im, Mat& c
 		distanceTransform((255 - pyramid[i]), chamfer[i], CV_DIST_C, 3);
 	}
 
-	Mat matching_thr;
+	//Mat matching_thr;
 
-#pragma omp parallel for default(none) shared(chamfer, matching, chamfer_heads, template_im, pdiff, utils) private(matching_thr)
+#pragma omp parallel for default(none) shared(chamfer, matching, chamfer_heads, template_im, pdiff, utils) //private(matching_thr)
 	for (int j = 0; j < scales; j++)
 	{
 		double t = (double)getTickCount();
@@ -231,7 +241,7 @@ void DepthHumanDetector::chamfer_matching(Mat & image, Mat & template_im, Mat& c
 		Point minLoc, maxLoc;
 		normalize(matching[j], matching[j], 0.0, 1.0, NORM_MINMAX);
 		minMaxLoc(matching[j], &minVal, &maxVal, &minLoc, &maxLoc);
-		//Mat matching_thr;
+		Mat matching_thr;
 		threshold(matching[j], matching_thr, 1.0 / chamfer_thr, 1.0, CV_THRESH_BINARY_INV);
 		double scale = pow(1.0 / scale_factor, j);
 		vector<Point3f> chamfer_heads_private;
@@ -399,8 +409,14 @@ void DepthHumanDetector::extract_contours(Mat & depthimg, vector<Point>& heads, 
 	for (int i = 0; i < heads.size();++i)
 	{
 		Point seed = heads[i];
-		
-		region_grow(depthimg, seed, region);
+		float head_height = 2 * final_head_features[i].radius;
+
+		if (i+1<heads.size())
+		{
+			ushort depth_diff = depthimg.at<ushort>(heads[i + 1]) - depthimg.at<ushort>(heads[i]);
+			depth_thr = depth_diff / 2.0;
+		}
+		region_grow(depthimg, seed, region,head_height);
 		Mat body;
 		depthimg.copyTo(body, (region == CONTOURS));
 
@@ -464,7 +480,7 @@ void DepthHumanDetector::get_neighborings(Mat & depthimg, Mat & region, vector<D
 	//sort(edgesafter.begin(), edgesafter.end());
 }
 
-void DepthHumanDetector::region_grow(Mat& depthimg, Point seed, Mat& region)
+void DepthHumanDetector::region_grow(Mat& depthimg, Point seed, Mat& region,float head_height)
 {
 	float depthavg = depthimg.at<ushort>(seed);
 	vector<DepthSimilarity> edgesbefore,edgesafer;
@@ -476,15 +492,40 @@ void DepthHumanDetector::region_grow(Mat& depthimg, Point seed, Mat& region)
 		
 		if (edgesafer.empty())
 		{
-			break;
-		}
-		/*for (int i = 0; i < edgesafer.size();++i)
-		{
-			if (edgesafer[i].similarity<depth_thr)
+			//check for whether needs to grow again from bottom
+			int body_height = static_cast<int>(head_height * 6.5);
+			int body_width = static_cast<int>(head_height/2);
+			int start_x = seed.x - body_width;
+			int start_y = seed.y;
+			bool needs_regrow = false;
+			for (int i = start_x; i < start_x + body_width;++i)
 			{
-				region.at<uchar>(edgesafer[i].point) = CONTOURS;
+				for (int j = start_y; j < start_y + body_height;++j)
+				{
+					Point pt = Point(i, j);
+					if (pt.x<0||pt.x>=depthimg.cols||pt.y<0||pt.y>=depthimg.rows||region.at<uchar>(pt)!=NOVISITED)
+					{
+						continue;
+					}
+					
+					if (is_body(depthimage,depthavg,pt))
+					{
+						needs_regrow = true;
+						region.at<uchar>(pt) = CONTOURS;
+						float similarity = (float)depthimg.at<ushort>(pt) - depthavg;
+						DepthSimilarity ds(pt, similarity);
+						edgesafer.push_back(ds);
+						break;
+					}
+					else
+						region.at<uchar>(pt) = VISITED;
+				}
 			}
-		}*/
+			if (!needs_regrow)
+			{
+				break;
+			}
+		}
 
 		edgesbefore.swap(edgesafer);
 		depthavg = mean(depthimg, (region == CONTOURS))[0];
@@ -678,10 +719,31 @@ void DepthHumanDetector::sort_heads(vector<Point>& detected_heads)
 				break;
 			}
 			else
-				detected_heads[insertpos+1] = detected_heads[insertpos];
+			{
+				detected_heads[insertpos + 1] = detected_heads[insertpos];
+				final_head_features[insertpos + 1] = final_head_features[insertpos];
+			}
 		}
 		detected_heads[insertpos+1] = curpos;
+		final_head_features[insertpos + 1] = final_head_features[i];
+
 	}
+}
+
+bool DepthHumanDetector::is_body(Mat & depthimag,float depthavg, Point pt)
+{
+	float similarity = (float)depthimag.at<ushort>(pt) - depthavg;
+
+	if (similarity <= 0.0&&abs(similarity) <= depth_thrf)
+	{	
+		return true;
+	}
+	else if (similarity >= 0.0&&similarity <= depth_thr)
+	{
+		return true;
+	}
+	else
+		return false;
 }
 
 
